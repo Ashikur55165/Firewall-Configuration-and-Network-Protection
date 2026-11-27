@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Firewall Protection Dashboard</title>
+<style>
+:root{font-family:Inter,system-ui,Segoe UI,Arial,sans-serif;color:#172033;background:#f3f6fb}
+*{box-sizing:border-box}body{margin:0}.top{background:#101c35;color:white;padding:23px max(20px,calc((100% - 1150px)/2));display:flex;justify-content:space-between;align-items:center;gap:15px;flex-wrap:wrap}
+.top h1{font-size:22px;margin:0 0 5px}.top p{margin:0;color:#b8c5da;font-size:13px}.wrap{max-width:1150px;margin:24px auto;padding:0 18px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.card{background:white;border:1px solid #e0e7f0;border-radius:13px;padding:18px;box-shadow:0 3px 12px #14213b08;margin-bottom:16px}.metric{font-size:24px;font-weight:750;margin-top:8px}.muted{color:#65738a;font-size:13px}.status{font-weight:700}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#9ca3af;margin-right:7px}.dot.on{background:#16a34a}.dot.off{background:#dc2626}
+h2{font-size:17px;margin:0 0 14px}.formgrid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;align-items:end}label{display:block;font-size:12px;color:#536179;margin-bottom:5px}input,select{width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;background:white;color:#172033}button{padding:10px 13px;border:0;border-radius:8px;background:#2458c6;color:white;font-weight:650;cursor:pointer}button.secondary{background:#e8eef8;color:#223453}button.danger{background:#b42318}button.small{padding:6px 9px;font-size:12px}button:disabled{opacity:.5;cursor:wait}.tablewrap{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;padding:11px 9px;border-bottom:1px solid #edf0f5;white-space:nowrap}th{color:#65738a;font-weight:650}.pill{padding:4px 8px;border-radius:20px;font-size:11px;font-weight:700}.allow{background:#dcfce7;color:#166534}.block{background:#fee2e2;color:#991b1b}.code{background:#0e1729;color:#d7e5ff;border-radius:9px;padding:13px;white-space:pre-wrap;overflow:auto;max-height:280px;font:12px/1.5 ui-monospace,Consolas,monospace}.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}.message{padding:10px;border-radius:8px;margin:10px 0;font-size:13px;display:none}.message.ok{display:block;background:#dcfce7;color:#166534}.message.err{display:block;background:#fee2e2;color:#991b1b}.footer{color:#69778c;font-size:12px;text-align:center;padding:10px 0 30px}.note{font-size:12px;color:#65738a;line-height:1.5;margin-top:10px}
+@media(max-width:800px){.grid{grid-template-columns:1fr}.formgrid{grid-template-columns:1fr 1fr}.formgrid .wide{grid-column:1/-1}}
+</style></head>
+<body>
+<header class="top"><div><h1>🛡 Firewall Configuration & Network Protection</h1><p>Linux host firewall · nftables · live rule management</p></div><div class="status" id="statusText"><span class="dot"></span>Checking firewall…</div></header>
+<main class="wrap">
+<div class="grid">
+ <section class="card"><div class="muted">Firewall status</div><div class="metric" id="statusMetric">Checking</div><div class="muted">inet fwproject table</div></section>
+ <section class="card"><div class="muted">Configured rules</div><div class="metric" id="ruleMetric">—</div><div class="muted">Enabled and disabled rules</div></section>
+ <section class="card"><div class="muted">Protection</div><div class="metric">Default DROP</div><div class="muted">Unmatched inbound traffic is blocked</div></section>
+</div>
+<section class="card">
+ <h2>Create firewall rule</h2>
+ <form id="ruleForm" class="formgrid">
+  <div class="wide"><label>Rule name</label><input name="name" maxlength="60" placeholder="Allow tester to web demo" required></div>
+  <div><label>Action</label><select name="action"><option value="allow">Allow</option><option value="block">Block</option></select></div>
+  <div><label>Source IP / CIDR</label><input name="source" placeholder="192.168.1.50 or blank"></div>
+  <div><label>Protocol</label><select name="protocol" id="protocol"><option value="tcp">TCP</option><option value="udp">UDP</option><option value="icmp">ICMP</option><option value="any">Any (source required)</option></select></div>
+  <div><label>Destination port</label><input name="port" id="port" type="number" min="1" max="65535" placeholder="8080"></div>
+  <div><button type="submit">Save & apply rule</button></div>
+ </form>
+ <p class="note">Leave Source blank to match any source. TCP/UDP ports are destination ports on this Ubuntu machine. Explicit block rules take precedence over user allow rules. The configured management subnet is reserved for dashboard/SSH access.</p>
+ <div id="message" class="message"></div>
+</section>
+<section class="card">
+ <div class="toolbar"><h2 style="margin:auto auto auto 0">Firewall rules</h2><button class="secondary" id="refresh">Refresh</button><button id="apply">Re-apply rules</button></div>
+ <div class="tablewrap"><table><thead><tr><th>Name</th><th>Action</th><th>Source</th><th>Protocol</th><th>Port</th><th>Enabled</th><th>Manage</th></tr></thead><tbody id="rulesBody"><tr><td colspan="7">Loading rules…</td></tr></tbody></table></div>
+</section>
+<section class="card">
+ <div class="toolbar"><h2 style="margin:auto auto auto 0">Firewall activity logs</h2><button class="secondary" id="loadLogs">Refresh logs</button><button class="secondary" id="loadStatus">Show nftables ruleset</button></div>
+ <pre class="code" id="logs">Press “Refresh logs” to view kernel firewall drop messages.</pre>
+ <pre class="code" id="ruleset" style="display:none;margin-top:12px"></pre>
+ <p class="note">The kernel may rate-limit repeated log entries. Logs show packets dropped by this project’s firewall; a lack of log entries does not prove that no scan occurred.</p>
+</section>
+<div class="footer">Firewall Project · For a private test network only · Never expose the dashboard directly to the public Internet</div>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+function msg(text,ok=true){const el=$('message');el.textContent=text;el.className='message '+(ok?'ok':'err');}
+async function api(url,opts={}){const r=await fetch(url,{headers:{'Content-Type':'application/json',...(opts.headers||{})},...opts});let data={};try{data=await r.json()}catch{}if(!r.ok)throw new Error(data.error||data.message||`HTTP ${r.status}`);return data;}
+async function loadRules(){const rows=await api('/api/rules');$('ruleMetric').textContent=rows.length;const body=$('rulesBody');if(!rows.length){body.innerHTML='<tr><td colspan="7" class="muted">No custom rules yet.</td></tr>';return;}body.innerHTML=rows.map(r=>`<tr><td>${escapeHtml(r.name)}</td><td><span class="pill ${r.action}">${r.action.toUpperCase()}</span></td><td>${escapeHtml(r.source||'Any')}</td><td>${r.protocol.toUpperCase()}</td><td>${r.port??'—'}</td><td>${r.enabled?'Yes':'No'}</td><td><button class="small secondary" onclick="toggleRule(${r.id})">${r.enabled?'Disable':'Enable'}</button> <button class="small danger" onclick="deleteRule(${r.id})">Delete</button></td></tr>`).join('');}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+async function loadStatus(){const s=await api('/api/status');$('statusMetric').textContent=s.active?'ACTIVE':'INACTIVE';$('statusText').innerHTML=`<span class="dot ${s.active?'on':'off'}"></span>${s.active?'Firewall active':'Firewall inactive'}`;$('ruleset').textContent=s.ruleset||s.message;}
+async function refresh(){try{await Promise.all([loadRules(),loadStatus()]);}catch(e){msg(e.message,false);}}
+$('ruleForm').addEventListener('submit',async e=>{e.preventDefault();const fd=new FormData(e.target);const data=Object.fromEntries(fd.entries());try{const res=await api('/api/rules',{method:'POST',body:JSON.stringify(data)});msg(res.message);e.target.reset();await refresh();}catch(err){msg(err.message,false);}});
+async function deleteRule(id){if(!confirm('Delete this firewall rule?'))return;try{const r=await api(`/api/rules/${id}`,{method:'DELETE'});msg(r.message);await refresh();}catch(e){msg(e.message,false);}}
+async function toggleRule(id){try{const r=await api(`/api/rules/${id}/toggle`,{method:'POST'});msg(r.message);await refresh();}catch(e){msg(e.message,false);}}
+$('refresh').onclick=refresh;$('apply').onclick=async()=>{try{const r=await api('/api/apply',{method:'POST'});msg(r.message||'Rules applied');await refresh();}catch(e){msg(e.message,false);}};
+$('loadLogs').onclick=async()=>{try{const r=await api('/api/logs');$('logs').textContent=r.logs.length?r.logs.join('\n'):(r.warning||'No FWPROJECT drop messages found in the latest kernel log lines.');}catch(e){$('logs').textContent=e.message;}};
+$('loadStatus').onclick=async()=>{try{await loadStatus();$('ruleset').style.display='block';}catch(e){msg(e.message,false);}};
+$('protocol').onchange=()=>{$('port').disabled=!['tcp','udp'].includes($('protocol').value);if($('port').disabled)$('port').value='';};
+refresh();
+</script>
+</body></html>
